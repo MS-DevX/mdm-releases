@@ -149,20 +149,20 @@ To upgrade to the latest stable release, simply re-run the one-line installation
 
 ```bash
 # Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/MS-DevX/MDM/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.sh | bash
 
 # Windows PowerShell
-powershell -ep Bypass -c "irm https://raw.githubusercontent.com/MS-DevX/MDM/main/install.ps1 | iex"
+powershell -ep Bypass -c "irm https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.ps1 | iex"
 ```
 
 To install a specific version, set `MDM_VERSION`:
 
 ```bash
 # Linux / macOS
-export MDM_VERSION=v0.1.0 && curl -fsSL https://raw.githubusercontent.com/MS-DevX/MDM/main/install.sh | bash
+export MDM_VERSION=v0.1.0 && curl -fsSL https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.sh | bash
 
 # Windows PowerShell
-$env:MDM_VERSION="v0.1.0"; powershell -ep Bypass -c "irm https://raw.githubusercontent.com/MS-DevX/MDM/main/install.ps1 | iex"
+$env:MDM_VERSION="v0.1.0"; powershell -ep Bypass -c "irm https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.ps1 | iex"
 ```
 
 ---
@@ -373,8 +373,8 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for th
 
 This project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold it.
 
-- Found a bug? [Open an issue](https://github.com/MS-DevX/MDM/issues/new/choose).
-- Have an idea? [Open a feature request](https://github.com/MS-DevX/MDM/issues/new/choose).
+- Found a bug? [Open an issue](https://github.com/MS-DevX/mdm-releases/issues).
+- Have an idea? [Open a feature request](https://github.com/MS-DevX/mdm-releases/issues).
 - Ready to code? Fork the repo and open a pull request.
 
 ---
