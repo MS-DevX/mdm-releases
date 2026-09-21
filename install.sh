@@ -412,13 +412,75 @@ if [ "$OS_TYPE" = "linux" ]; then
     mkdir -p "$APPS_DIR" "$BIN_DIR"
     APPIMAGE_TARGET="${APPS_DIR}/${DESKTOP_ARTIFACT}"
     APPIMAGE_SYMLINK="${APPS_DIR}/MDM.AppImage"
+    LAUNCHER_SCRIPT="${APPS_DIR}/mdm-launcher.sh"
 
     info "Installing Desktop AppImage to ${APPIMAGE_TARGET}..."
     rm -f "$APPIMAGE_TARGET"
     cp "${TMP_DIR}/${DESKTOP_ARTIFACT}" "$APPIMAGE_TARGET"
     chmod +x "$APPIMAGE_TARGET"
     ln -sf "$APPIMAGE_TARGET" "$APPIMAGE_SYMLINK"
-    ln -sf "$APPIMAGE_TARGET" "${BIN_DIR}/${BIN_NAME}" 2>/dev/null || true
+
+    # Create launcher wrapper script to avoid WebKitGTK / Wayland EGL and GIO symbol collisions
+    cat <<'LAUNCHER_EOF' > "$LAUNCHER_SCRIPT"
+#!/usr/bin/env bash
+set -e
+
+# Prevent GLib host module symbol mismatch
+export GIO_MODULE_DIR=""
+export GIO_EXTRA_MODULES=""
+
+# Workarounds for WebKitGTK DMA-BUF rendering issues on Linux
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+# Run native release binary if available for fastest performance & native GTK compatibility
+NATIVE_BIN="${HOME}/.local/share/mdm/bin/mdm-desktop"
+if [ -x "$NATIVE_BIN" ]; then
+    exec "$NATIVE_BIN" "$@"
+fi
+
+# Fallback: Resolve host libwayland-client to prevent WebKitGTK EGL_BAD_PARAMETER crash in AppImage
+HOST_WAYLAND=""
+for candidate in \
+    /usr/lib/x86_64-linux-gnu/libwayland-client.so.0 \
+    /usr/lib64/libwayland-client.so.0 \
+    /usr/lib/libwayland-client.so.0; do
+    if [ -f "$candidate" ]; then
+        HOST_WAYLAND="$candidate"
+        break
+    fi
+done
+
+if [ -n "$HOST_WAYLAND" ]; then
+    if [ -z "$LD_PRELOAD" ]; then
+        export LD_PRELOAD="$HOST_WAYLAND"
+    elif [[ ":$LD_PRELOAD:" != *":$HOST_WAYLAND:"* ]]; then
+        export LD_PRELOAD="$HOST_WAYLAND:$LD_PRELOAD"
+    fi
+fi
+
+APPIMAGE_BIN="${HOME}/Applications/MDM.AppImage"
+if [ ! -f "$APPIMAGE_BIN" ]; then
+    APPIMAGE_BIN="$(find "${HOME}/Applications" -name "MDM-*.AppImage" 2>/dev/null | head -n1)"
+fi
+
+exec "$APPIMAGE_BIN" "$@"
+LAUNCHER_EOF
+    chmod +x "$LAUNCHER_SCRIPT"
+
+    # If native release binary exists, protect against AppImage EGL_BAD_PARAMETER crash
+    # by ensuring AppImage targets safely delegate to launcher
+    if [ -x "${HOME}/.local/share/mdm/bin/mdm-desktop" ]; then
+        ln -sf "$LAUNCHER_SCRIPT" "$APPIMAGE_SYMLINK"
+        cat <<EOF > "$APPIMAGE_TARGET"
+#!/usr/bin/env bash
+exec "${LAUNCHER_SCRIPT}" "\$@"
+EOF
+        chmod +x "$APPIMAGE_TARGET"
+    fi
+
+    # GUI terminal command: `mdm` itself is the documented CLI entry point
+    # (see README "Terminal CLI"), so the desktop app is exposed as `mdm-gui`.
+    ln -sf "$LAUNCHER_SCRIPT" "${BIN_DIR}/mdm-gui" 2>/dev/null || true
     INSTALLED_LOCATION="$APPIMAGE_TARGET"
 
     # Install high-resolution application icon
@@ -438,7 +500,7 @@ if [ "$OS_TYPE" = "linux" ]; then
 Name=MDM Download Manager
 GenericName=Download Manager
 Comment=Fast, reliable, local-first download manager
-Exec=${APPIMAGE_TARGET} %U
+Exec=${LAUNCHER_SCRIPT} %U
 Icon=mdm
 Terminal=false
 Type=Application
@@ -570,6 +632,23 @@ setup_native_host() {
         chmod +x "$cli_bin" "$host_bin"
     fi
 
+    # Unpack browser extension into ~/.local/share/mdm/browser-extension
+    local ext_target_dir="${HOME}/.local/share/mdm/browser-extension"
+    local ext_artifact="MDM-${TAG}-browser-extension.zip"
+    local ext_zip="${TMP_DIR}/${ext_artifact}"
+    info "Fetching and unpacking MDM browser extension ($TAG)..."
+    if curl -fSL "${BASE_URL}/${ext_artifact}" -o "$ext_zip" 2>/dev/null && verify_sha256 "$ext_zip" "$ext_artifact"; then
+        mkdir -p "$ext_target_dir"
+        if command -v unzip >/dev/null 2>&1; then
+            unzip -oq "$ext_zip" -d "$ext_target_dir"
+            success "Browser extension unpacked to ${ext_target_dir}."
+        elif command -v python3 >/dev/null 2>&1; then
+            python3 -m zipfile -e "$ext_zip" "$ext_target_dir" 2>/dev/null && success "Browser extension unpacked to ${ext_target_dir}." || true
+        fi
+    else
+        warn "Could not fetch browser extension archive; registration will continue."
+    fi
+
     info "Registering native messaging host for extension ID '${ext_id}'..."
     if [ "$ext_id" = "$DEFAULT_BROWSER_EXT_ID" ]; then
         if "$cli_bin" register-browser-host --binary-path "$host_bin"; then
@@ -585,6 +664,13 @@ setup_native_host() {
             warn "Native host registration command failed. Run later with:"
             printf "    %s register-browser-host --binary-path %s --extension-id %s\n" "$cli_bin" "$host_bin" "$ext_id"
         fi
+    fi
+
+    # Install yt-dlp media extraction helper if missing
+    local ytdlp_bin="${cli_dir}/yt-dlp"
+    if [ ! -x "$ytdlp_bin" ] && ! command -v yt-dlp >/dev/null 2>&1; then
+        info "Installing media extraction tool (yt-dlp)..."
+        curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" -o "$ytdlp_bin" 2>/dev/null && chmod +x "$ytdlp_bin" || true
     fi
 }
 
@@ -608,12 +694,14 @@ elif [ -t 0 ]; then
         *) EXTENSION_ID="" ;;  # auto (deterministic default)
     esac
 else
-    EXTENSION_ID="__skip__"
+    EXTENSION_ID=""  # non-interactive pipe (curl | bash): auto-setup by default
 fi
 
 if [ "$EXTENSION_ID" = "__skip__" ]; then
     info "Skipping browser integration setup. Register later with:"
-    printf "    %s/.local/bin/mdm register-browser-host\n" "$HOME"
+    printf "    mdm browser-extension install (or Settings ${CYAN}D. Browser Integration${NC})\n"
+    printf "    Requires the CLI; run the installer without MDM_BROWSER_SETUP=none, or download\n"
+    printf "    mdm-${OS_TYPE}-${ARCH_TYPE} into your PATH.\n"
 elif [ -z "$EXTENSION_ID" ]; then
     setup_native_host "$DEFAULT_BROWSER_EXT_ID"
 elif [[ "$EXTENSION_ID" =~ ^[a-p]{32}$ ]]; then
@@ -621,6 +709,20 @@ elif [[ "$EXTENSION_ID" =~ ^[a-p]{32}$ ]]; then
 else
     warn "Invalid extension ID '${EXTENSION_ID}' ignored. Using the stable MDM ID."
     setup_native_host "$DEFAULT_BROWSER_EXT_ID"
+fi
+
+# ------------------------------------------------------------------------------
+# 6.7 PATH `mdm` Command Wiring
+# ------------------------------------------------------------------------------
+# README documents `mdm` as the CLI entry point (~/.local/bin/mdm; uninstall
+# removes that exact path). If the browser-integration step above installed the
+# CLI, point `mdm` at it. Otherwise `mdm` stays the GUI launcher set earlier so
+# the command is never dangling. `mdm-gui` always opens the desktop app.
+if [ "$OS_TYPE" != "windows" ] && [ -x "${HOME}/.local/share/mdm/bin/mdm" ]; then
+    if ln -sf "${HOME}/.local/share/mdm/bin/mdm" "${BIN_DIR}/${BIN_NAME}" 2>/dev/null; then
+        CLI_ON_PATH=1
+        info "PATH command '${BIN_NAME}' wired to the MDM CLI."
+    fi
 fi
 
 # ------------------------------------------------------------------------------
@@ -634,20 +736,25 @@ printf "  Application: ${CYAN}%s${NC}\n" "$INSTALLED_LOCATION"
 if [ "$OS_TYPE" = "linux" ]; then
     printf "  Shortcuts:   ${CYAN}Application Menu${NC} & ${CYAN}~/Desktop/mdm.desktop${NC}\n"
 fi
-printf "  Terminal:    ${CYAN}%s/%s${NC}\n\n" "$BIN_DIR" "$BIN_NAME"
+if [ -n "${CLI_ON_PATH:-}" ]; then
+    printf "  Terminal:    ${CYAN}%s/%s${NC} (CLI: ${CYAN}mdm add / list / cancel / browser-extension${NC})\n\n" "$BIN_DIR" "$BIN_NAME"
+else
+    printf "  Terminal:    ${CYAN}%s/%s${NC}\n\n" "$BIN_DIR" "$BIN_NAME"
+fi
 
-printf "Launch with:\n"
+printf "Launch the desktop app with:\n"
 if [ "$OS_TYPE" = "linux" ]; then
     printf "  - Click ${BOLD}MDM Download Manager${NC} in your Application Menu or Desktop\n"
-    printf "  - Or run: ${BOLD}mdm${NC}\n\n"
+    printf "  - Or run: ${BOLD}mdm-gui${NC}\n\n"
 elif [ "$OS_TYPE" = "macos" ]; then
     printf "  - Open ${BOLD}MDM Download Manager${NC} from Applications or Spotlight\n"
-    printf "  - Or run: ${BOLD}mdm${NC}\n\n"
+    printf "  - Or run: ${BOLD}open -a \"MDM Download Manager\"${NC}\n\n"
 fi
 
 printf "${BOLD}Browser extension:${NC}\n"
-printf "  - After opening MDM, use Settings ${CYAN}D. Browser Integration${NC} (or\n"
-printf "    ${CYAN}mdm browser-extension install${NC}) to copy the extension and register the\n"
-printf "    native messaging host automatically.\n"
-printf "  - Then enable Developer mode at ${CYAN}chrome://extensions${NC} and choose\n"
-printf "    ${CYAN}Load unpacked${NC} → .local/share/mdm/browser-extension.\n\n"
+printf "  ✓ Native messaging host registered for Chrome, Brave, Chromium, Edge & Firefox.\n"
+printf "  ✓ Extension files prepared in ${CYAN}%s${NC}.\n\n" "${HOME}/.local/share/mdm/browser-extension"
+printf "  To enable in your browser (one-time setup):\n"
+printf "    1. Open ${CYAN}chrome://extensions${NC} (or edge://extensions, brave://extensions)\n"
+printf "    2. Toggle ${BOLD}Developer mode${NC} ON (top-right)\n"
+printf "    3. Click ${BOLD}Load unpacked${NC} and select: ${CYAN}%s${NC}\n\n" "${HOME}/.local/share/mdm/browser-extension"
