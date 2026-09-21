@@ -429,8 +429,12 @@ set -e
 export GIO_MODULE_DIR=""
 export GIO_EXTRA_MODULES=""
 
-# Workarounds for WebKitGTK DMA-BUF rendering issues on Linux
+# Workarounds for WebKitGTK DMA-BUF rendering, compositing, Mesa EGL, and sandbox crashes on Linux
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export LIBGL_ALWAYS_SOFTWARE=1
+export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+export GDK_BACKEND=x11
 
 # Run native release binary if available for fastest performance & native GTK compatibility
 NATIVE_BIN="${HOME}/.local/share/mdm/bin/mdm-desktop"
@@ -504,6 +508,14 @@ EOF
     # Update GTK icon cache so desktop environments immediately register the mdm icon
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "${HOME}/.local/share/icons/hicolor" 2>/dev/null || true
+    fi
+
+    # Install yt-dlp media helper tool so YouTube & video extraction works immediately
+    YTDLP_BIN="${BIN_DIR}/yt-dlp"
+    if [ ! -f "$YTDLP_BIN" ]; then
+        info "Installing yt-dlp media helper tool..."
+        curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" -o "$YTDLP_BIN" 2>/dev/null || true
+        chmod +x "$YTDLP_BIN" 2>/dev/null || true
     fi
 
     # Install desktop application menu launcher
