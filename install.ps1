@@ -87,6 +87,23 @@ function Register-NativeMessagingHost {
         }
     }
 
+    # Fetch and unpack browser extension into %LOCALAPPDATA%\MDM\browser-extension
+    $extDir = Join-Path $localAppData "MDM\browser-extension"
+    $extArtifact = "MDM-$Tag-browser-extension.zip"
+    $extZip = Join-Path $cliDir $extArtifact
+    Write-Host "→ Fetching MDM browser extension ($Tag)..." -ForegroundColor Gray
+    try {
+        Invoke-WebRequest -Uri "$BaseUrl/$extArtifact" -OutFile $extZip -UseBasicParsing
+        if (Test-ArtifactChecksum $extZip $extArtifact $ChecksumLines) {
+            New-Item -ItemType Directory -Path $extDir -Force | Out-Null
+            Expand-Archive -Path $extZip -DestinationPath $extDir -Force
+            Remove-Item -Path $extZip -Force -ErrorAction SilentlyContinue
+            Write-Host "✓ Browser extension unpacked to $extDir." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "! Browser extension archive unavailable; registration will continue." -ForegroundColor Yellow
+    }
+
     Write-Host "→ Registering native messaging host for extension '$ExtensionId'..." -ForegroundColor Gray
     if ([string]::IsNullOrWhiteSpace($ExtensionId)) {
         & $cliPath register-browser-host --binary-path $hostPath
@@ -361,9 +378,18 @@ try {
     Write-Host ""
     Write-Host "✓ $AppName ($tag) installed successfully!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "You can now launch MDM Download Manager from:" -ForegroundColor White
+    Write-Host "Launch MDM Download Manager from:" -ForegroundColor White
     Write-Host "  - Windows Start Menu" -ForegroundColor Cyan
     Write-Host "  - Desktop shortcut" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Browser extension:" -ForegroundColor White
+    Write-Host "  ✓ Native messaging host registered for Chrome, Brave, Chromium, Edge & Firefox." -ForegroundColor Green
+    $extPathMsg = Join-Path (if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { "C:\Users\Default\AppData\Local" }) "MDM\browser-extension"
+    Write-Host "  ✓ Extension files prepared in: $extPathMsg" -ForegroundColor Green
+    Write-Host "  To enable in your browser:" -ForegroundColor Gray
+    Write-Host "    1. Open chrome://extensions (or edge://extensions, brave://extensions)" -ForegroundColor Cyan
+    Write-Host "    2. Toggle Developer mode ON" -ForegroundColor Cyan
+    Write-Host "    3. Click 'Load unpacked' and select: $extPathMsg" -ForegroundColor Cyan
     Write-Host ""
 
 } finally {
