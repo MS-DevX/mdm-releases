@@ -483,12 +483,27 @@ EOF
     ln -sf "$LAUNCHER_SCRIPT" "${BIN_DIR}/mdm-gui" 2>/dev/null || true
     INSTALLED_LOCATION="$APPIMAGE_TARGET"
 
-    # Install high-resolution application icon
-    ICON_DIR="${HOME}/.local/share/icons/hicolor/128x128/apps"
-    mkdir -p "$ICON_DIR"
-    ICON_PATH="${ICON_DIR}/mdm.png"
-    if [ ! -f "$ICON_PATH" ]; then
-        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/assets/128x128.png" -o "$ICON_PATH" 2>/dev/null || true
+    # Install high-resolution application icons across standard resolutions
+    for size in 32x32 128x128 256x256; do
+        mkdir -p "${HOME}/.local/share/icons/hicolor/${size}/apps"
+    done
+    ICON_128="${HOME}/.local/share/icons/hicolor/128x128/apps/mdm.png"
+    ICON_32="${HOME}/.local/share/icons/hicolor/32x32/apps/mdm.png"
+    ICON_256="${HOME}/.local/share/icons/hicolor/256x256/apps/mdm.png"
+
+    if [ ! -f "$ICON_128" ]; then
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/assets/128x128.png" -o "$ICON_128" 2>/dev/null || true
+    fi
+    if [ ! -f "$ICON_32" ]; then
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/assets/32x32.png" -o "$ICON_32" 2>/dev/null || true
+    fi
+    if [ ! -f "$ICON_256" ]; then
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/assets/128x128@2x.png" -o "$ICON_256" 2>/dev/null || true
+    fi
+
+    # Update GTK icon cache so desktop environments immediately register the mdm icon
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "${HOME}/.local/share/icons/hicolor" 2>/dev/null || true
     fi
 
     # Install desktop application menu launcher
@@ -501,7 +516,7 @@ Name=MDM Download Manager
 GenericName=Download Manager
 Comment=Fast, reliable, local-first download manager
 Exec=${LAUNCHER_SCRIPT} %U
-Icon=mdm
+Icon=${ICON_128}
 Terminal=false
 Type=Application
 Categories=Network;FileTransfer;
@@ -514,6 +529,9 @@ EOF
     if [ -d "${HOME}/Desktop" ]; then
         cp "$DESKTOP_ENTRY" "${HOME}/Desktop/mdm.desktop" 2>/dev/null || true
         chmod +x "${HOME}/Desktop/mdm.desktop" 2>/dev/null || true
+        if command -v gio >/dev/null 2>&1; then
+            gio set "${HOME}/Desktop/mdm.desktop" metadata::trusted true 2>/dev/null || true
+        fi
     fi
 
     if command -v update-desktop-database >/dev/null 2>&1; then
