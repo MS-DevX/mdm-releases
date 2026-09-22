@@ -36,9 +36,13 @@
 
 ## 📸 Screenshots
 
-| Main Library | New Download Wizard | Live Progress | Download Complete |
-|:---:|:---:|:---:|:---:|
-| <img src="assets/screenshots/main.png" width="100%" alt="MDM main window" /> | <img src="assets/screenshots/wizard.png" width="100%" alt="MDM add download wizard" /> | <img src="assets/screenshots/progress.png" width="100%" alt="MDM progress window" /> | <img src="assets/screenshots/complete.png" width="100%" alt="MDM download complete dialog" /> |
+| High-Speed Downloads Dashboard | Browser Integration & Control Center |
+|:---:|:---:|
+| <img src="assets/screenshots/screenshot-1-dashboard.png" width="100%" alt="MDM Dashboard - High-Speed Downloads" /> | <img src="assets/screenshots/screenshot-2-browser-extension.png" width="100%" alt="MDM Browser Extension - 1-Click Stream Interception" /> |
+
+| Media Stream Extractor | Parallel Chunk Acceleration | Smart Queue & Scheduler |
+|:---:|:---:|:---:|
+| <img src="assets/screenshots/screenshot-3-media-extractor.png" width="100%" alt="MDM Built-in Video & Audio Extractor" /> | <img src="assets/screenshots/screenshot-4-chunk-acceleration.png" width="100%" alt="MDM Multi-Connection Chunk Engine" /> | <img src="assets/screenshots/screenshot-5-queue-automation.png" width="100%" alt="MDM Bandwidth Limiter & Download Scheduler" /> |
 
 ---
 
