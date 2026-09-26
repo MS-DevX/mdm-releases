@@ -91,7 +91,7 @@ Install the standalone MDM Command-Line Interface (`mdm`) with a single command:
 
 ```bash
 # Using official domain
-curl -fsSL https://marthdownloadmanager.msdevx.com/install | bash
+curl -fsSL https://marthdownloadmanager.msdevx.space/install | bash
 
 # Or directly from the public releases repository
 curl -fsSL https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.sh | bash
@@ -103,7 +103,7 @@ curl -fsSL https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.s
 
 ```powershell
 # Using official domain
-powershell -ep Bypass -c "irm https://marthdownloadmanager.msdevx.com/install.ps1 | iex"
+irm https://marthdownloadmanager.msdevx.space/install.ps1 | iex
 
 # Or directly from the public releases repository
 powershell -ep Bypass -c "irm https://raw.githubusercontent.com/MS-DevX/mdm-releases/main/install.ps1 | iex"
